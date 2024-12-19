@@ -4,7 +4,8 @@ from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 import cv2
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Load the pre-trained model
 model = load_model('tomato_sorting_cnn.h5')  # Update with your model path
@@ -109,26 +110,25 @@ if uploaded_files:
         st.metric("Medium", results['Medium'], delta=None)
         st.metric("Large", results['Large'], delta=None)
 
-    # Add a pie chart for visualization
+    # Add pie charts for visualization
     st.markdown("---")
     st.markdown("### Visualization")
     color_data = [results['Red'], results['Green'], results['Orange']]
     size_data = [results['Small'], results['Medium'], results['Large']]
 
-    color_chart = st.columns(2)
-    with color_chart[0]:
-        st.subheader("Color Distribution")
-        fig1, ax1 = plt.subplots()
-        ax1.pie(color_data, labels=['Red', 'Green', 'Orange'], autopct='%1.1f%%',
-                colors=['#FF6347', '#90EE90', '#FFA500'])
-        st.pyplot(fig1)
+    color_chart = px.pie(values=color_data, names=['Red', 'Green', 'Orange'], title="Color Distribution",
+                         color_discrete_sequence=['#FF6347', '#90EE90', '#FFA500'])
+    size_chart = px.pie(values=size_data, names=['Small', 'Medium', 'Large'], title="Size Distribution",
+                        color_discrete_sequence=['#4682B4', '#32CD32', '#FFD700'])
 
-    with color_chart[1]:
-        st.subheader("Size Distribution")
-        fig2, ax2 = plt.subplots()
-        ax2.pie(size_data, labels=['Small', 'Medium', 'Large'], autopct='%1.1f%%',
-                colors=['#4682B4', '#32CD32', '#FFD700'])
-        st.pyplot(fig2)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.plotly_chart(color_chart, use_container_width=True)
+    with col2:
+        st.plotly_chart(size_chart, use_container_width=True)
+else:
+    st.warning("No images uploaded yet. Please upload images to proceed.")
 
 # Footer
 st.markdown("---")
