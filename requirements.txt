@@ -2,4 +2,4 @@ streamlit
 tensorflow
 pillow
 opencv-python-headless
-matplotlib
+plotly
