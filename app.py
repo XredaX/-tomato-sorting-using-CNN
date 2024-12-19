@@ -55,18 +55,17 @@ def classify_size(diameter):
 
 
 # App Configuration
-st.set_page_config(page_title="Tomato Sorting Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Cherry Tomatoes Sorting Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # Sidebar Configuration
-st.sidebar.title("Tomato Sorting Parameters")
+st.sidebar.title("Cherry Tomatoes Sorting Parameters")
 st.sidebar.markdown("### Sorting Thresholds")
 threshold_small_medium = st.sidebar.slider("Diameter Threshold (Small - Medium)", 15, 25, 20, step=1)
 threshold_medium_large = st.sidebar.slider("Diameter Threshold (Medium - Large)", 25, 35, 25, step=1)
 
 # Main UI
-st.title("🍅 Tomato Sorting Dashboard")
+st.title("🍅 Cherry Tomato Sorting Dashboard")
 st.markdown("""
-### Welcome to the Tomato Sorting Dashboard
 Easily classify tomatoes by ripeness and size. Use the options below to upload images for sorting.
 """)
 
