@@ -4,6 +4,7 @@ from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 import cv2
+import matplotlib.pyplot as plt
 
 # Load the pre-trained model
 model = load_model('tomato_sorting_cnn.h5')  # Update with your model path
@@ -58,8 +59,8 @@ st.set_page_config(page_title="Tomato Sorting Dashboard", layout="wide", initial
 # Sidebar Configuration
 st.sidebar.title("Tomato Sorting Parameters")
 st.sidebar.markdown("### Sorting Thresholds")
-st.sidebar.slider("Diameter Threshold (Small - Medium)", 15, 25, 20, step=1)
-st.sidebar.slider("Diameter Threshold (Medium - Large)", 25, 35, 25, step=1)
+threshold_small_medium = st.sidebar.slider("Diameter Threshold (Small - Medium)", 15, 25, 20, step=1)
+threshold_medium_large = st.sidebar.slider("Diameter Threshold (Medium - Large)", 25, 35, 25, step=1)
 
 # Main UI
 st.title("🍅 Tomato Sorting Dashboard")
@@ -84,8 +85,8 @@ if uploaded_files:
         diameter = estimate_diameter(image)
         size_label = classify_size(diameter)
 
-        st.write(f"**Color Classification**: {label} (Confidence: {confidence:.2f})")
-        st.write(f"**Estimated Diameter**: {diameter:.2f}px ({size_label})")
+        st.markdown(f"**Color Classification**: `{label}` (Confidence: `{confidence:.2f}`)")
+        st.markdown(f"**Estimated Diameter**: `{diameter:.2f}px` ({size_label})")
 
         # Update results summary
         results[label] += 1
@@ -94,14 +95,40 @@ if uploaded_files:
 
     # Display summary
     st.markdown("### Sorting Summary")
-    st.write("**Color Classification:**")
-    st.write(f"- Red: {results['Red']}")
-    st.write(f"- Green: {results['Green']}")
-    st.write(f"- Orange: {results['Orange']}")
-    st.write("**Size Classification:**")
-    st.write(f"- Small: {results['Small']}")
-    st.write(f"- Medium: {results['Medium']}")
-    st.write(f"- Large: {results['Large']}")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Color Classification")
+        st.metric("Red", results['Red'], delta=None)
+        st.metric("Green", results['Green'], delta=None)
+        st.metric("Orange", results['Orange'], delta=None)
+
+    with col2:
+        st.subheader("Size Classification")
+        st.metric("Small", results['Small'], delta=None)
+        st.metric("Medium", results['Medium'], delta=None)
+        st.metric("Large", results['Large'], delta=None)
+
+    # Add a pie chart for visualization
+    st.markdown("---")
+    st.markdown("### Visualization")
+    color_data = [results['Red'], results['Green'], results['Orange']]
+    size_data = [results['Small'], results['Medium'], results['Large']]
+
+    color_chart = st.columns(2)
+    with color_chart[0]:
+        st.subheader("Color Distribution")
+        fig1, ax1 = plt.subplots()
+        ax1.pie(color_data, labels=['Red', 'Green', 'Orange'], autopct='%1.1f%%',
+                colors=['#FF6347', '#90EE90', '#FFA500'])
+        st.pyplot(fig1)
+
+    with color_chart[1]:
+        st.subheader("Size Distribution")
+        fig2, ax2 = plt.subplots()
+        ax2.pie(size_data, labels=['Small', 'Medium', 'Large'], autopct='%1.1f%%',
+                colors=['#4682B4', '#32CD32', '#FFD700'])
+        st.pyplot(fig2)
 
 # Footer
 st.markdown("---")
