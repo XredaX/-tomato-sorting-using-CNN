@@ -1,13 +1,14 @@
 import streamlit as st
-import cv2
 import numpy as np
 from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
+import cv2
 
 # Load the pre-trained model
 model = load_model('tomato_sorting_cnn.h5')  # Update with your model path
-class_labels = {0: 'Red', 1: 'Green', 2: 'Orange'}
+class_labels = {0: 'Green', 1: 'Orange', 2: 'Red'}
+
 
 # Helper function for classification
 def classify_tomato(image):
@@ -17,53 +18,90 @@ def classify_tomato(image):
     prediction = model.predict(image_array)
     return class_labels[np.argmax(prediction)], np.max(prediction)
 
-# Real-time webcam function
-def webcam_stream():
-    st.title("Tomato Sorting - Webcam Stream")
-    run = st.checkbox('Start Webcam')
-    FRAME_WINDOW = st.image([])
-    camera = cv2.VideoCapture(0)
 
-    while run:
-        ret, frame = camera.read()
-        if not ret:
-            break
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        FRAME_WINDOW.image(frame)
-        # Preprocess and classify frame (optional)
-    camera.release()
+# Helper function for diameter estimation
+def estimate_diameter(image):
+    # Convert to grayscale
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    # Apply GaussianBlur
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Detect edges using Canny
+    edges = cv2.Canny(blurred, 50, 150)
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        # Assume the largest contour corresponds to the tomato
+        largest_contour = max(contours, key=cv2.contourArea)
+        # Fit a bounding circle to the largest contour
+        ((x, y), radius) = cv2.minEnclosingCircle(largest_contour)
+        diameter = radius * 2
+        return diameter  # Return diameter in pixels
+    return None
+
+
+# Map diameter to size category
+def classify_size(diameter):
+    if diameter is None:
+        return "Unknown"
+    elif diameter < 20:
+        return "Small"
+    elif 20 <= diameter <= 25:
+        return "Medium"
+    else:
+        return "Large"
+
 
 # App Configuration
 st.set_page_config(page_title="Tomato Sorting Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # Sidebar Configuration
 st.sidebar.title("Tomato Sorting Parameters")
-st.sidebar.markdown("### Upload or stream tomatoes for sorting")
-mode = st.sidebar.radio("Select Mode", ("Upload Images", "Real-time Webcam"))
+st.sidebar.markdown("### Sorting Thresholds")
+st.sidebar.slider("Diameter Threshold (Small - Medium)", 15, 25, 20, step=1)
+st.sidebar.slider("Diameter Threshold (Medium - Large)", 25, 35, 25, step=1)
 
 # Main UI
 st.title("🍅 Tomato Sorting Dashboard")
 st.markdown("""
 ### Welcome to the Tomato Sorting Dashboard
-Easily classify tomatoes by ripeness and size. Use the options below to upload images or start a real-time webcam stream.
+Easily classify tomatoes by ripeness and size. Use the options below to upload images for sorting.
 """)
 
-if mode == "Upload Images":
-    st.markdown("### Upload Multiple Tomato Images")
-    uploaded_files = st.file_uploader("Upload tomato images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+st.markdown("### Upload Multiple Tomato Images")
+uploaded_files = st.file_uploader("Upload tomato images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-    if uploaded_files:
-        st.markdown("### Classification Results")
-        for uploaded_file in uploaded_files:
-            image = Image.open(uploaded_file)
-            st.image(image, caption=f"Uploaded Image: {uploaded_file.name}", use_column_width=True)
+if uploaded_files:
+    st.markdown("### Classification Results")
+    results = {"Red": 0, "Green": 0, "Orange": 0, "Small": 0, "Medium": 0, "Large": 0}
 
-            # Classify the tomato
-            label, confidence = classify_tomato(image)
-            st.write(f"**Classification**: {label} (Confidence: {confidence:.2f})")
+    for uploaded_file in uploaded_files:
+        image = Image.open(uploaded_file)
+        st.image(image, caption=f"Uploaded Image: {uploaded_file.name}")
 
-elif mode == "Real-time Webcam":
-    webcam_stream()
+        # Classify the tomato
+        label, confidence = classify_tomato(image)
+        diameter = estimate_diameter(image)
+        size_label = classify_size(diameter)
+
+        st.write(f"**Color Classification**: {label} (Confidence: {confidence:.2f})")
+        st.write(f"**Estimated Diameter**: {diameter:.2f}px ({size_label})")
+
+        # Update results summary
+        results[label] += 1
+        if size_label in results:
+            results[size_label] += 1
+
+    # Display summary
+    st.markdown("### Sorting Summary")
+    st.write("**Color Classification:**")
+    st.write(f"- Red: {results['Red']}")
+    st.write(f"- Green: {results['Green']}")
+    st.write(f"- Orange: {results['Orange']}")
+    st.write("**Size Classification:**")
+    st.write(f"- Small: {results['Small']}")
+    st.write(f"- Medium: {results['Medium']}")
+    st.write(f"- Large: {results['Large']}")
 
 # Footer
 st.markdown("---")
