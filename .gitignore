@@ -163,3 +163,4 @@ cython_debug/
 .vscode
 .env
 /model
+tomato_sorting_cnn.h5
