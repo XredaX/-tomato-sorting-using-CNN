@@ -1,5 +1,8 @@
 from ultralytics import YOLO
 import cv2
+import requests
+import numpy as np
+
 # Step 3: Deploy Model for Real-Time Sorting
 # Load the best model from training
 model = YOLO("model.pt")
@@ -10,7 +13,7 @@ color_labels = {
     1: "Semi-ripe (Orange)",
     2: "Ripe (Bright Red)"
 }
-results = []
+
 # Function to determine size category based on diameter
 def determine_size(diameter_mm):
     if diameter_mm < 20:
@@ -43,17 +46,35 @@ def process_frame(frame, model):
 
     return frame
 
-# Real-time video capture
-cap = cv2.VideoCapture(0)  # Use 0 for default camera; replace with video file path if needed
+# Real-time video capture using IP Webcam
+ip_camera_url = "http://192.168.0.100:8080/video"
+cap = cv2.VideoCapture(ip_camera_url)
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        break
+        # Attempt to fetch the frame from the IP webcam
+        response = requests.get(ip_camera_url, stream=True)
+        if response.status_code == 200:
+            bytes_data = bytes()
+            for chunk in response.iter_content(chunk_size=1024):
+                bytes_data += chunk
+                a = bytes_data.find(b'\xff\xd8')
+                b = bytes_data.find(b'\xff\xd9')
+                if a != -1 and b != -1:
+                    jpg = bytes_data[a:b + 2]
+                    bytes_data = bytes_data[b + 2:]
+                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    break
+        else:
+            print("Failed to fetch the frame from IP webcam.")
+            break
 
     processed_frame = process_frame(frame, model)
-    
-    cv2.imshow("Cherry Tomato Sorting", processed_frame)
+
+    # Resize window to fit within screen boundaries
+    resized_frame = cv2.resize(processed_frame, (960, 540))  # Adjust dimensions as needed
+    cv2.imshow("Cherry Tomato Sorting", resized_frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
@@ -66,10 +87,17 @@ cv2.destroyAllWindows()
 # Here we'll display a simple real-time statistic
 sorted_count = {"Ripe": 0, "Semi-ripe": 0, "Unripe": 0}
 
-for result in results:
-    for box in result.boxes:
-        cls = int(box.cls[0].item())
-        label = color_labels[cls]
-        sorted_count[label] += 1
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    results = model.predict(source=frame, imgsz=640, conf=0.5)  # Predict multiple tomatoes in real-time
+
+    for result in results:
+        for box in result.boxes:
+            cls = int(box.cls[0].item())
+            label = color_labels[cls]
+            sorted_count[label] += 1
 
 print("Sorting Statistics:", sorted_count)
