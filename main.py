@@ -2,6 +2,10 @@ from ultralytics import YOLO
 import cv2
 import requests
 import numpy as np
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Step 3: Deploy Model for Real-Time Sorting
 # Load the best model from training
@@ -55,7 +59,7 @@ def process_frame(frame, model):
     return frame
 
 # Real-time video capture using IP Webcam
-ip_camera_url = "http://192.168.0.100:8080/video"
+ip_camera_url = os.getenv("IP_CAM_URL")
 cap = cv2.VideoCapture(ip_camera_url)
 
 while True:
