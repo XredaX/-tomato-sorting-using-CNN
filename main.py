@@ -14,6 +14,13 @@ color_labels = {
     2: "Ripe (Bright Red)"
 }
 
+# Define bounding box colors for each label
+bbox_colors = {
+    0: (0, 255, 0),    # Green
+    1: (0, 165, 255),  # Orange
+    2: (0, 0, 255)     # Red
+}
+
 # Function to determine size category based on diameter
 def determine_size(diameter_mm):
     if diameter_mm < 20:
@@ -33,6 +40,7 @@ def process_frame(frame, model):
             conf = box.conf[0].item()
             cls = int(box.cls[0].item())
             color_label = color_labels[cls]
+            bbox_color = bbox_colors[cls]
             
             # Calculate diameter (assuming circular tomatoes)
             diameter_px = max(abs(x2 - x1), abs(y2 - y1))
@@ -40,9 +48,9 @@ def process_frame(frame, model):
             size_label = determine_size(diameter_mm)
             
             # Draw bounding box and label
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"{color_label}, {size_label}"
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), bbox_color, 2)
+            label = f"{color_label}, {size_label} ({diameter_mm:.1f} mm)"
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, bbox_color, 2)
 
     return frame
 
