@@ -1,5 +1,7 @@
 import streamlit as st
 import cv2
+from threading import Thread
+from queue import Queue
 import numpy as np
 from ultralytics import YOLO
 import plotly.express as px
@@ -65,6 +67,9 @@ TRACKING_THRESHOLD = 30  # pixels
 DISAPPEAR_THRESHOLD = 2.0  # seconds
 UPDATE_INTERVAL = 0.5  # seconds
 last_chart_update = 0
+PROCESS_EVERY_N_FRAMES = 3  # Process every 3rd frame
+FRAME_WIDTH = 640  # Reduced frame width
+UPDATE_INTERVAL = 1.0  # Increase chart update interval to 1 second
 
 def update_charts(color_counts, size_counts, current_time):
     global last_chart_update
@@ -110,16 +115,40 @@ def process_frame(frame, current_time):
         centroid = ((x1 + x2) // 2, (y1 + y2) // 2)
         current_centroids.append((centroid, cls, (x1, y1, x2, y2)))
         
-        # Draw bounding box and label
-        color_name, color_bgr = color_labels[cls]
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
-        cv2.putText(frame, f"{color_name} ({conf:.2f})", (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
-        
         # Calculate diameter and size
         diameter_px = max(abs(x2 - x1), abs(y2 - y1))
         diameter_mm = diameter_px / frame.shape[1] * 100
         size_category = determine_size(diameter_mm)
+        
+        # Draw bounding box and enhanced label
+        color_name, color_bgr = color_labels[cls]
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
+        
+        # Create multi-line label
+        label_lines = [
+            f"{color_name}",
+            f"{diameter_mm:.1f}mm ({size_category})",
+            f"Conf: {conf:.2f}"
+        ]
+        
+        # Draw background rectangle for text
+        text_size = cv2.getTextSize(max(label_lines, key=len), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+        cv2.rectangle(frame, 
+                     (x1, y1 - 10 - (len(label_lines) * 15)), 
+                     (x1 + text_size[0], y1),
+                     color_bgr, 
+                     -1)  # Filled rectangle
+        
+        # Draw each line of text
+        for i, line in enumerate(label_lines):
+            y_pos = y1 - 5 - ((len(label_lines) - 1 - i) * 15)
+            cv2.putText(frame, 
+                       line,
+                       (x1, y_pos),
+                       cv2.FONT_HERSHEY_SIMPLEX,
+                       0.5,
+                       (255, 255, 255),  # White text
+                       2)
         
         # Update tracking
         tracked = False
@@ -169,6 +198,29 @@ def process_frame(frame, current_time):
 if st.sidebar.button("Start Processing"):
     try:
         cap = cv2.VideoCapture(ip_camera_url)
+        frame_count = 0
+        
+        # Create queues for async processing
+        frame_queue = Queue(maxsize=1)
+        result_queue = Queue(maxsize=1)
+        
+        def process_frames():
+            while cap.isOpened():
+                if not frame_queue.empty():
+                    frame = frame_queue.get()
+                    current_time = time.time()
+                    processed_frame, color_counts, size_counts = process_frame(frame, current_time)
+                    
+                    # Put results in queue, overwriting old results
+                    if result_queue.full():
+                        result_queue.get()
+                    result_queue.put((processed_frame, color_counts, size_counts, current_time))
+        
+        # Start processing thread
+        process_thread = Thread(target=process_frames, daemon=True)
+        process_thread.start()
+        
+        last_processed_frame = None
         
         while cap.isOpened():
             ret, frame = cap.read()
@@ -176,36 +228,45 @@ if st.sidebar.button("Start Processing"):
                 st.error("Failed to fetch frame from camera.")
                 break
             
-            current_time = time.time()
+            frame_count += 1
             
-            # Process frame and get counts
-            processed_frame, color_counts, size_counts = process_frame(frame, current_time)
+            # Resize frame for better performance
+            frame = cv2.resize(frame, (FRAME_WIDTH, int(FRAME_WIDTH * frame.shape[0] / frame.shape[1])))
             
-            # Update metrics
-            total_counter.metric("Total Tomatoes", sum(color_counts.values()))
+            # Process every Nth frame
+            if frame_count % PROCESS_EVERY_N_FRAMES == 0:
+                # Update frame queue, dropping old frame if necessary
+                if frame_queue.full():
+                    frame_queue.get()
+                frame_queue.put(frame.copy())
             
-            # Update individual color metrics
-            for color, count in color_counts.items():
-                color_metrics[color].metric(color, count)
+            # Update metrics and get processed frame if available
+            if not result_queue.empty():
+                last_processed_frame, color_counts, size_counts, current_time = result_queue.get()
+                
+                # Update metrics
+                total_counter.metric("Total Tomatoes", sum(color_counts.values()))
+                
+                # Update color metrics
+                for color, count in color_counts.items():
+                    color_metrics[color].metric(color, count)
+                
+                # Update size metrics
+                for size, count in size_counts.items():
+                    size_metrics[size].metric(size, count)
+                
+                # Update charts with throttling
+                update_charts(color_counts, size_counts, current_time)
             
-            # Update individual size metrics
-            for size, count in size_counts.items():
-                size_metrics[size].metric(size, count)
-            
-            # Update charts with throttling
-            update_charts(color_counts, size_counts, current_time)
-            
-            # Display processed frame
-            video_placeholder.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), 
+            # Display the processed frame if available, otherwise display raw frame
+            display_frame = last_processed_frame if last_processed_frame is not None else frame
+            video_placeholder.image(cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB), 
                                  channels="RGB",
                                  use_container_width=True)
             
-            # Add a small delay to prevent freezing
-            time.sleep(0.01)
+            # Small delay to prevent CPU overload
+            time.sleep(0.001)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-                
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
     finally:
