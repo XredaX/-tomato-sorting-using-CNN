@@ -67,7 +67,7 @@ This project implements a real-time cherry tomato sorting system that:
 
 ```bash
 # Clone repository
-git https://github.com/abdellatif-laghjaj/tomato-sorting-using-CNN
+git https://github.com/XredaX/-tomato-sorting-using-CNN
 cd tomato-sorting-using-CNN
 
 # Create virtual environment
