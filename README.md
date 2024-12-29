@@ -104,10 +104,7 @@ streamlit run app.py
 
 ## 🤖 Model Architecture
 
-- **Network Structure**
-
-<img src="./assets/model-arch.png" alt="Screenshot" width="300 ">
-```bash
+```
 Input Layer (640x640x3)
     │
     ▼
@@ -135,8 +132,7 @@ Output Layers
     └── Confidence Scores
 ```
 
-- **Training Configuration**
-
+### Training Configuration
 ```python
 model.train(
     data=data_yaml_path,
