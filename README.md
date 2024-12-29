@@ -99,6 +99,8 @@ streamlit run app.py
 
 - **Network Structure**
 
+![Architecture](./assets/model-arch.png)
+
 ```bash
 Input Layer (640x640x3)
     │
