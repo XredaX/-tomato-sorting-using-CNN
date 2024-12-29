@@ -50,7 +50,7 @@ This project implements a real-time cherry tomato sorting system that:
 ## 🛠️ Technologies Used
 
 - **Python 3.8+**: Core programming language
-- **YOLOv8**: Object detection & classification
+- **YOLOv11**: Object detection & classification
 - **Streamlit**: Interactive web interface
 - **OpenCV**: Image processing & camera integration
 - **Plotly**: Data visualization
@@ -150,5 +150,5 @@ Open Pull Request
 ## 🙏 Acknowledgments
 
 OpenCV community for computer vision tools
-Ultralytics for YOLOv8 framework
+Ultralytics for YOLOv11 framework
 Streamlit team for the amazing dashboard framework
