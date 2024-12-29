@@ -9,7 +9,7 @@ load_dotenv()
 
 # Step 3: Deploy Model for Real-Time Sorting
 # Load the best model from training
-model = YOLO("model.pt")
+model = YOLO("models/model.pt")
 
 # Define color labels
 color_labels = {
