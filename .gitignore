@@ -162,5 +162,5 @@ cython_debug/
 .idea/
 .vscode
 .env
-/model
+/model/
 tomato_sorting_cnn.h5
