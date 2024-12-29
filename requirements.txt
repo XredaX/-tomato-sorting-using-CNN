@@ -3,3 +3,4 @@ ultralytics
 requests
 numpy
 python-dotenv
+plotly
