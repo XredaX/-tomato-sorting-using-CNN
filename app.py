@@ -59,23 +59,31 @@ tracked_tomatoes = {}
 last_seen = {}
 TRACKING_THRESHOLD = 30  # pixels
 DISAPPEAR_THRESHOLD = 2.0  # seconds
+UPDATE_INTERVAL = 0.5  # seconds
+last_chart_update = 0
 
-def update_charts(color_counts, size_counts):
-    # Update color distribution chart
-    fig_color = px.pie(
-        names=list(color_counts.keys()),
-        values=list(color_counts.values()),
-        title="Color Distribution"
-    )
-    color_chart_placeholder.plotly_chart(fig_color, use_container_width=True)
+def update_charts(color_counts, size_counts, current_time):
+    global last_chart_update
+    
+    # Only update charts every UPDATE_INTERVAL seconds
+    if current_time - last_chart_update >= UPDATE_INTERVAL:
+        # Update color distribution chart
+        fig_color = px.pie(
+            names=list(color_counts.keys()),
+            values=list(color_counts.values()),
+            title="Color Distribution"
+        )
+        color_chart_placeholder.plotly_chart(fig_color, use_container_width=True, key=f"color_chart_{current_time}")
 
-    # Update size distribution chart
-    fig_size = px.pie(
-        names=list(size_counts.keys()),
-        values=list(size_counts.values()),
-        title="Size Distribution"
-    )
-    size_chart_placeholder.plotly_chart(fig_size, use_container_width=True)
+        # Update size distribution chart
+        fig_size = px.pie(
+            names=list(size_counts.keys()),
+            values=list(size_counts.values()),
+            title="Size Distribution"
+        )
+        size_chart_placeholder.plotly_chart(fig_size, use_container_width=True, key=f"size_chart_{current_time}")
+        
+        last_chart_update = current_time
 
 def process_frame(frame, current_time):
     color_counts = {label: 0 for label, _ in color_labels.values()}
@@ -180,12 +188,16 @@ if st.sidebar.button("Start Processing"):
             for size, count in size_counts.items():
                 size_metrics[size].metric(size, count)
             
-            # Update charts in real-time
-            update_charts(color_counts, size_counts)
+            # Update charts with throttling
+            update_charts(color_counts, size_counts, current_time)
             
             # Display processed frame
             video_placeholder.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), 
-                                 channels="RGB")
+                                 channels="RGB",
+                                 use_container_width=True)
+            
+            # Add a small delay to prevent freezing
+            time.sleep(0.01)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
