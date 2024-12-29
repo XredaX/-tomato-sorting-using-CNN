@@ -1,3 +1,10 @@
+## 👨‍💻 Credits
+
+| Contributors |
+|-------------|
+| Laghjaj Abdellatif |
+| Reda El Bettioui |
+
 # 🍅 Cherry Tomato Sorting System
 
 An intelligent computer vision system for automated cherry tomato sorting based on ripeness and size using YOLOv11 and Streamlit.
@@ -99,8 +106,7 @@ streamlit run app.py
 
 - **Network Structure**
 
-<img src="./assets/model-arch.png" alt="Screenshot" width="300">
-
+<img src="./assets/model-arch.png" alt="Screenshot" width="300 ">
 ```bash
 Input Layer (640x640x3)
     │
