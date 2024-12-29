@@ -59,7 +59,7 @@ def process_frame(frame, model):
     return frame
 
 # Real-time video capture using IP Webcam
-ip_camera_url = os.getenv("IP_CAM_URL")
+ip_camera_url = "http://192.168.0.101:8080/video"
 cap = cv2.VideoCapture(ip_camera_url)
 
 while True:
