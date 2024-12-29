@@ -28,8 +28,12 @@ def determine_size(diameter_mm):
     else:
         return "Large"
 
+# App Configuration
+st.set_page_config(page_title="Cherry Tomatoes Sorting Dashboard", layout="wide", initial_sidebar_state="expanded")
+
 # Initialize Streamlit app
-st.title("Cherry Tomato Sorting Dashboard")
+st.title("🍅 Cherry Tomato Sorting Dashboard")
+st.markdown("""Easily classify tomatoes by ripeness and size..""")
 
 # Sidebar settings
 st.sidebar.header("Camera Feed Settings")
