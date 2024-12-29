@@ -4,3 +4,4 @@ requests
 numpy
 python-dotenv
 plotly
+streamlit-webrtc
