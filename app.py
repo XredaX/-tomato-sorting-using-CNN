@@ -1,138 +1,118 @@
 import streamlit as st
-import numpy as np
-from PIL import Image
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
 import cv2
+import numpy as np
+from ultralytics import YOLO
 import plotly.express as px
-import plotly.graph_objects as go
 
-# Load the pre-trained model
-model = load_model('tomato_sorting_cnn.h5')  # Update with your model path
-class_labels = {0: 'Green', 1: 'Orange', 2: 'Red'}
+# Load the YOLO model
+model = YOLO("models/model.pt")
 
+# Define color labels
+color_labels = {
+    0: "Unripe (Green)",
+    1: "Semi-ripe (Orange)",
+    2: "Ripe (Bright Red)"
+}
 
-# Helper function for classification
-def classify_tomato(image):
-    image = image.resize((150, 150))
-    image_array = img_to_array(image) / 255.0
-    image_array = np.expand_dims(image_array, axis=0)
-    prediction = model.predict(image_array)
-    return class_labels[np.argmax(prediction)], np.max(prediction)
+# Expected size range for cherry tomatoes (in mm)
+MIN_DIAMETER_MM = 15
+MAX_DIAMETER_MM = 30
 
-
-# Helper function for diameter estimation
-def estimate_diameter(image):
-    # Convert to grayscale
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-    # Apply GaussianBlur
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    # Detect edges using Canny
-    edges = cv2.Canny(blurred, 50, 150)
-    # Find contours
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if contours:
-        # Assume the largest contour corresponds to the tomato
-        largest_contour = max(contours, key=cv2.contourArea)
-        # Fit a bounding circle to the largest contour
-        ((x, y), radius) = cv2.minEnclosingCircle(largest_contour)
-        diameter = radius * 2
-        return diameter  # Return diameter in pixels
-    return None
-
-
-# Map diameter to size category
-def classify_size(diameter):
-    if diameter is None:
-        return "Unknown"
-    elif diameter < 20:
+# Function to determine size category based on diameter
+def determine_size(diameter_mm):
+    if diameter_mm < 20:
         return "Small"
-    elif 20 <= diameter <= 25:
+    elif 20 <= diameter_mm <= 25:
         return "Medium"
     else:
         return "Large"
 
+# Initialize Streamlit app
+st.title("Cherry Tomato Sorting Dashboard")
 
-# App Configuration
-st.set_page_config(page_title="Cherry Tomatoes Sorting Dashboard", layout="wide", initial_sidebar_state="expanded")
+# Sidebar for real-time video feed
+st.sidebar.header("Camera Feed Settings")
+ip_camera_url = st.sidebar.text_input("IP Camera URL", "http://192.168.0.101:8080/video")
 
-# Sidebar Configuration
-st.sidebar.title("Cherry Tomatoes Sorting Parameters")
-st.sidebar.markdown("### Sorting Thresholds")
-threshold_small_medium = st.sidebar.slider("Diameter Threshold (Small - Medium)", 15, 25, 20, step=1)
-threshold_medium_large = st.sidebar.slider("Diameter Threshold (Medium - Large)", 25, 35, 25, step=1)
+# Placeholder for the video feed
+video_placeholder = st.empty()
 
-# Main UI
-st.title("🍅 Cherry Tomato Sorting Dashboard")
-st.markdown("""
-Easily classify tomatoes by ripeness and size. Use the options below to upload images for sorting.
-""")
+# Metrics placeholders
+col1, col2, col3 = st.columns(3)
+total_tomatoes_placeholder = col1.metric("Total Tomatoes", "0")
+color_distribution_placeholder = col2.metric("Color Distribution", "N/A")
+size_distribution_placeholder = col3.metric("Size Distribution", "N/A")
 
-st.markdown("### Upload Multiple Tomato Images")
-uploaded_files = st.file_uploader("Upload tomato images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+# Data for plots
+color_counts = {"Unripe (Green)": 0, "Semi-ripe (Orange)": 0, "Ripe (Bright Red)": 0}
+size_counts = {"Small": 0, "Medium": 0, "Large": 0}
 
-if uploaded_files:
-    st.markdown("### Classification Results")
-    results = {"Red": 0, "Green": 0, "Orange": 0, "Small": 0, "Medium": 0, "Large": 0}
+# Start processing video feed
+if st.sidebar.button("Start Processing"):
+    cap = cv2.VideoCapture(ip_camera_url)
+    total_tomatoes = 0
 
-    for uploaded_file in uploaded_files:
-        image = Image.open(uploaded_file)
-        st.image(image, caption=f"Uploaded Image: {uploaded_file.name}")
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to fetch frame from camera.")
+            break
 
-        # Classify the tomato
-        label, confidence = classify_tomato(image)
-        diameter = estimate_diameter(image)
-        size_label = classify_size(diameter)
+        results = model.predict(source=frame, imgsz=640, conf=0.6)
 
-        st.markdown(f"**Color Classification**: `{label}` (Confidence: `{confidence:.2f}`)")
-        st.markdown(f"**Estimated Diameter**: `{diameter:.2f}px` ({size_label})")
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                cls = int(box.cls[0].item())
 
-        # Update results summary
-        results[label] += 1
-        if size_label in results:
-            results[size_label] += 1
+                # Skip objects that are not cherry tomatoes
+                if cls not in color_labels:
+                    continue
 
-    # Display summary
-    st.markdown("### Sorting Summary")
-    col1, col2 = st.columns(2)
+                # Calculate diameter (assuming circular tomatoes)
+                diameter_px = max(abs(x2 - x1), abs(y2 - y1))
+                diameter_mm = diameter_px / frame.shape[1] * 100
 
-    with col1:
-        st.subheader("Color Classification")
-        st.metric("Red", results['Red'], delta=None)
-        st.metric("Green", results['Green'], delta=None)
-        st.metric("Orange", results['Orange'], delta=None)
+                # Filter by size
+                if diameter_mm < MIN_DIAMETER_MM or diameter_mm > MAX_DIAMETER_MM:
+                    continue
 
-    with col2:
-        st.subheader("Size Classification")
-        st.metric("Small", results['Small'], delta=None)
-        st.metric("Medium", results['Medium'], delta=None)
-        st.metric("Large", results['Large'], delta=None)
+                color_label = color_labels[cls]
+                size_label = determine_size(diameter_mm)
 
-    # Add pie charts for visualization
-    st.markdown("---")
-    st.markdown("### Visualization")
-    color_data = [results['Red'], results['Green'], results['Orange']]
-    size_data = [results['Small'], results['Medium'], results['Large']]
+                # Update counts
+                total_tomatoes += 1
+                color_counts[color_label] += 1
+                size_counts[size_label] += 1
 
-    color_chart = px.pie(values=color_data, names=['Red', 'Green', 'Orange'], title="Color Distribution",
-                         color_discrete_sequence=['#FF6347', '#90EE90', '#FFA500'])
-    size_chart = px.pie(values=size_data, names=['Small', 'Medium', 'Large'], title="Size Distribution",
-                        color_discrete_sequence=['#4682B4', '#32CD32', '#FFD700'])
+        # Update metrics
+        total_tomatoes_placeholder.metric("Total Tomatoes", total_tomatoes)
+        color_distribution_placeholder.metric("Color Distribution", str(color_counts))
+        size_distribution_placeholder.metric("Size Distribution", str(size_counts))
 
-    col1, col2 = st.columns(2)
+        # Display video feed
+        video_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
 
-    with col1:
-        st.plotly_chart(color_chart, use_container_width=True)
-    with col2:
-        st.plotly_chart(size_chart, use_container_width=True)
-else:
-    st.warning("No images uploaded yet. Please upload images to proceed.")
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-# Footer
-st.markdown("---")
-st.markdown("""
-**Tomato Sorting Dashboard**  
-Modern and scalable tomato sorting for industrial needs.  
-Built with ❤️ using Streamlit.
-""")
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Generate visualizations
+if st.sidebar.button("Generate Visualizations"):
+    # Pie chart for color distribution
+    fig_color = px.pie(
+        names=list(color_counts.keys()),
+        values=list(color_counts.values()),
+        title="Color Distribution"
+    )
+    st.plotly_chart(fig_color)
+
+    # Pie chart for size distribution
+    fig_size = px.pie(
+        names=list(size_counts.keys()),
+        values=list(size_counts.values()),
+        title="Size Distribution"
+    )
+    st.plotly_chart(fig_size)
