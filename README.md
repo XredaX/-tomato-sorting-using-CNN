@@ -13,7 +13,7 @@ This project implements a real-time cherry tomato sorting system that:
 
 ## 🎥 Demo
 
-<video controls width="60%">
+<video controls width="100%">
   <source src="./assets/demo.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
