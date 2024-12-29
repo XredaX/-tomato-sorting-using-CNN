@@ -2,10 +2,6 @@ from ultralytics import YOLO
 import cv2
 import requests
 import numpy as np
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Step 3: Deploy Model for Real-Time Sorting
 # Load the best model from training
@@ -18,12 +14,9 @@ color_labels = {
     2: "Ripe (Bright Red)"
 }
 
-# Define bounding box colors for each label
-bbox_colors = {
-    0: (0, 255, 0),    # Green
-    1: (0, 165, 255),  # Orange
-    2: (0, 0, 255)     # Red
-}
+# Expected size range for cherry tomatoes (in mm)
+MIN_DIAMETER_MM = 15
+MAX_DIAMETER_MM = 30
 
 # Function to determine size category based on diameter
 def determine_size(diameter_mm):
@@ -36,25 +29,42 @@ def determine_size(diameter_mm):
 
 # Function to process real-time video stream
 def process_frame(frame, model):
-    results = model.predict(source=frame, imgsz=640, conf=0.5)  # Adjust confidence threshold as needed
-    
+    results = model.predict(source=frame, imgsz=640, conf=0.6)  # Increased confidence threshold
+
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             conf = box.conf[0].item()
             cls = int(box.cls[0].item())
-            color_label = color_labels[cls]
-            bbox_color = bbox_colors[cls]
-            
+
+            # Skip objects that are not cherry tomatoes (assuming model classifies them correctly)
+            if cls not in color_labels:
+                continue
+
             # Calculate diameter (assuming circular tomatoes)
             diameter_px = max(abs(x2 - x1), abs(y2 - y1))
             diameter_mm = diameter_px / frame.shape[1] * 100  # Approximation based on field of view
+
+            # Filter out objects that do not match cherry tomato size range
+            if diameter_mm < MIN_DIAMETER_MM or diameter_mm > MAX_DIAMETER_MM:
+                continue
+
+            color_label = color_labels[cls]
             size_label = determine_size(diameter_mm)
-            
-            # Draw bounding box and label
-            cv2.rectangle(frame, (x1, y1), (x2, y2), bbox_color, 2)
-            label = f"{color_label}, {size_label} ({diameter_mm:.1f} mm)"
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, bbox_color, 2)
+
+            # Draw bounding box and label with respective color
+            if cls == 0:
+                color = (0, 255, 0)  # Green
+            elif cls == 1:
+                color = (0, 165, 255)  # Orange
+            elif cls == 2:
+                color = (0, 0, 255)  # Red
+            else:
+                color = (255, 255, 255)  # Default White
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            label = f"{color_label}, {size_label}, {diameter_mm:.1f} mm"
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     return frame
 
@@ -104,12 +114,13 @@ while cap.isOpened():
     if not ret:
         break
 
-    results = model.predict(source=frame, imgsz=640, conf=0.5)  # Predict multiple tomatoes in real-time
+    results = model.predict(source=frame, imgsz=640, conf=0.6)  # Predict multiple tomatoes in real-time
 
     for result in results:
         for box in result.boxes:
             cls = int(box.cls[0].item())
-            label = color_labels[cls]
-            sorted_count[label] += 1
+            if cls in color_labels:
+                label = color_labels[cls]
+                sorted_count[label] += 1
 
 print("Sorting Statistics:", sorted_count)
